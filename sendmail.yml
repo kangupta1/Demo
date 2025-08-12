@@ -2,6 +2,6 @@
   host: localhost
   tasks: 
     - name: Example playbook sending mail to root
-  community.general.mail:
-    subject: System {{ ansible_hostname }} has been successfully provisioned.
-  delegate_to: localhost
+      community.general.mail:
+        subject: System {{ ansible_hostname }} has been successfully provisioned.
+      delegate_to: localhost
