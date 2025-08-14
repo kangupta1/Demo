@@ -1,0 +1,109 @@
+---
+- name: Cleanup stale hosts from AAP inventories
+  hosts: localhost
+  gather_facts: false
+  vars:
+    controller_host: "{{ ansible_host | default('https://our-aap-controller') }}"
+    controller_username: "{{ vault_controller_username | default('admin') }}"
+    controller_password: "{{ vault_controller_password }}"
+    # Days to consider a host stale (no activity)
+    stale_days: 90
+    # Specific inventory to clean (optional)
+    target_inventory: "{{ cleanup_inventory | default('') }}"
+    
+  tasks:
+    - name: Get list of all inventories
+      awx.awx.inventory_info:
+        controller_host: "{{ controller_host }}"
+        controller_username: "{{ controller_username }}"
+        controller_password: "{{ controller_password }}"
+        validate_certs: false
+      register: inventory_list
+      when: target_inventory == ""
+
+    - name: Get specific inventory info
+      awx.awx.inventory_info:
+        controller_host: "{{ controller_host }}"
+        controller_username: "{{ controller_username }}"
+        controller_password: "{{ controller_password }}"
+        name: "{{ target_inventory }}"
+        validate_certs: false
+      register: single_inventory
+      when: target_inventory != ""
+
+    - name: Set inventory list for processing
+      set_fact:
+        inventories_to_process: "{{ single_inventory.inventories if target_inventory != '' else inventory_list.inventories }}"
+
+    - name: Get host metrics to identify stale hosts
+      uri:
+        url: "{{ controller_host }}/api/v2/host_metrics/"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ controller_token | default('') }}"
+        user: "{{ controller_username }}"
+        password: "{{ controller_password }}"
+        validate_certs: false
+        force_basic_auth: true
+      register: host_metrics
+
+    - name: Calculate cutoff date for stale hosts
+      set_fact:
+        cutoff_date: "{{ (ansible_date_time.epoch | int - (stale_days * 86400)) | int }}"
+
+    - name: Filter stale hosts
+      set_fact:
+        stale_hosts: "{{ host_metrics.json.results | selectattr('last_automated', '<', cutoff_date) | list }}"
+
+    - name: Display stale hosts found
+      debug:
+        msg: "Found {{ stale_hosts | length }} stale hosts (no activity in {{ stale_days }} days)"
+        
+    - name: Confirm deletion (manual step - comment out for automated runs)
+      pause:
+        prompt: "Continue with deletion of {{ stale_hosts | length }} hosts? (yes/no)"
+      register: confirm_deletion
+      when: stale_hosts | length > 0
+
+    - name: Bulk delete stale hosts from each inventory
+      awx.awx.bulk_host_delete:
+        controller_host: "{{ controller_host }}"
+        controller_username: "{{ controller_username }}"
+        controller_password: "{{ controller_password }}"
+        inventory: "{{ item.id }}"
+        host_filter: "last_job__lt={{ cutoff_date }}"
+        validate_certs: false
+      loop: "{{ inventories_to_process }}"
+      when: 
+        - stale_hosts | length > 0
+        - confirm_deletion.user_input | default('yes') == 'yes'
+      register: deletion_results
+
+    - name: Display deletion results
+      debug:
+        msg: "Deleted {{ item.deleted }} hosts from inventory {{ item.inventory }}"
+      loop: "{{ deletion_results.results | default([]) }}"
+      when: deletion_results is defined
+
+    - name: Alternative API-based bulk deletion for specific hosts
+      uri:
+        url: "{{ controller_host }}/api/v2/bulk/host_delete/"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          inventory: "{{ item.inventory_id }}"
+          host_names: "{{ item.stale_host_names }}"
+        user: "{{ controller_username }}"
+        password: "{{ controller_password }}"
+        validate_certs: false
+        force_basic_auth: true
+      loop: "{{ stale_hosts_by_inventory | default([]) }}"
+      when: use_api_deletion | default(false)
+
+# Usage examples:
+# 1. Clean all inventories: ansible-playbook host_cleanup.yml
+# 2. Clean specific inventory: ansible-playbook host_cleanup.yml -e "cleanup_inventory=Production"
+# 3. Different stale period: ansible-playbook host_cleanup.yml -e "stale_days=90"
+# 4. Automated (no confirmation): Remove the pause task above
