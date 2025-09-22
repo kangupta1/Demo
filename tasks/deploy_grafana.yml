@@ -1,0 +1,59 @@
+---
+- name: Install Grafana & Redis
+  ansible.builtin.package:
+    name:
+    - grafana
+    - redis
+    state: present
+
+- name: Configure Redis
+  ansible.builtin.template:
+    src: redis.conf.j2
+    dest: /etc/redis/redis.conf
+    owner: redis
+    group: root
+    mode: 0640
+
+- name: Configure Grafana
+  ansible.builtin.template:
+    src: grafana.ini.j2
+    dest: /etc/grafana/grafana.ini
+    owner: root
+    group: grafana
+    mode: 0640
+
+- name: Enable Grafana plug-in
+  ansible.builtin.copy:
+    src: grafana-plugins.yaml
+    dest: /etc/grafana/provisioning/plugins/pcp.yaml
+    owner: root
+    group: grafana
+    mode: 0640
+
+- name: Configure Grafana datasource
+  ansible.builtin.copy:
+    src: grafana-datasource.yaml
+    dest: /etc/grafana/provisioning/datasources/pcp.yaml
+    owner: root
+    group: grafana
+    mode: 0640
+
+- name: Configure Grafana dashboard
+  ansible.builtin.copy:
+    src: grafana-dashboard.yaml
+    dest: /etc/grafana/provisioning/dashboards/pcp.yaml
+    owner: root
+    group: grafana
+    mode: 0640
+
+- name: Start redis
+  ansible.builtin.service:
+    name: redis
+    enabled: true
+    state: started
+
+- name: Start Grafana
+  ansible.builtin.service:
+    name: grafana-server
+    enabled: true
+    state: started
