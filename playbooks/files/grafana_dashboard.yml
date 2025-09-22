@@ -1,0 +1,9 @@
+---
+apiVersion: 1
+
+providers:
+- name: PCP
+  type: file
+  options:
+    path: /usr/share/performancecopilot-pcp-app/datasources/redis/dashboards/pcp-redis-host-overview.json
+
