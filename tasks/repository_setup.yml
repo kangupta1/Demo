@@ -1,0 +1,17 @@
+---
+- name: Add RHEL9 base repository
+  ansible.builtin.yum_repository:
+    name: rhel-9.4-for-x86_64-baseos-rpms
+    description: Red Hat Enterprise Linux 9.4 BaseOS (dvd)
+    baseurl: http://content.example.com/rhel9.4/x86_64/dvd/BaseOS
+    gpgcheck: no
+    enabled: true
+
+- name: Add RHEL9 appstream repository
+  ansible.builtin.yum_repository:
+    name: rhel-9.4-for-x86_64-appstream-rpms
+    description: Red Hat Enterprise Linux 9.4 AppStream (dvd)
+    baseurl: http://content.example.com/rhel9.4/x86_64/dvd/AppStream
+    gpgcheck: no
+    enabled: true
+
