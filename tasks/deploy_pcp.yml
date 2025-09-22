@@ -1,0 +1,21 @@
+---
+- name: Install PCP
+  ansible.builtin.package:
+    name:
+    - pcp-zeroconf
+    state: present
+
+- name: Configure PCP
+  ansible.builtin.template:
+    src: pmproxy.conf.j2
+    dest: /etc/pcp/pmproxy/pmproxy.conf
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Start pmproxy
+  ansible.builtin.service:
+    name: pmproxy
+    enabled: true
+    state: started
+
